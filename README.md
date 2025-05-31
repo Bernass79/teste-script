@@ -1401,6 +1401,247 @@ else
     print("Aimbot: Aimbot inicializado com sucesso!")
 end
 
+-- Criar abas
+local Tabs = {
+    Main = Window:AddTab({ Title = "Revistar", Icon = "search" }),
+}
+
+-- Seção NECESSÁRIO
+Tabs.Main:AddParagraph({
+    Title = "Grand-Menu revist",
+    Content = "Feito por Polengo 👨‍💻"
+})
+
+Tabs.Main:AddSection("NECESSÁRIO")
+
+-- Botão Puxar Itens
+Tabs.Main:AddButton({
+    Title = "Puxar Itens 🎒",
+    Description = "Puxa todos os itens automaticamente",
+    Callback = function()
+        -- Função para deletar todas as NotifyGui
+        local function deletarNotifyGui()
+            local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+            for _, gui in ipairs(playerGui:GetChildren()) do
+                if gui.Name == "NotifyGui" and gui:IsA("ScreenGui") then
+                    gui:Destroy() -- Deleta a NotifyGui
+                end
+            end
+        end
+
+        -- Lista de itens para pegar
+        local itens = {"AK47", "Uzi", " Planta Limpa", "IA2", "Parafal", "Faca", "AR-15", "Glock 17", "IA2", "G3", "IPhone 14", "Agua", "Hamburguer", "Hi Power", "Natalina"}
+
+        -- Argumentos para a requisição
+        local args = {
+            [1] = "mudaInv",
+            [2] = "2",
+            [4] = "1"
+        }
+
+        -- Loop principal
+        while true do
+            -- Deletar todas as NotifyGui antes de pegar os itens
+            deletarNotifyGui()
+
+            -- Pegar itens
+            for i, item in ipairs(itens) do
+                if i <= 16 then  -- Só tenta alocar até 16 slots
+                    args[3] = item  -- Atualiza o item para o valor da vez
+                    args[2] = tostring(i)  -- Atribui o slot dinamicamente (1, 2, 3, ..., 16)
+                    task.spawn(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("InvRemotes"):WaitForChild("InvRequest"):InvokeServer(unpack(args))
+                    end)
+                end
+            end
+
+            wait(0)  -- Espera um frame para evitar lag
+        end
+    end
+})
+
+-- Seção PC
+Tabs.Main:AddSection("PC")
+
+-- Toggle para mandar revistar (TECLA T)
+local revistarToggle = Tabs.Main:AddToggle("RevistToggle", {
+    Title = "mandar revistar (TECLA T)",
+    Description = "Ativa/desativa o revistar com a tecla T",
+    Default = false
+})
+
+revistarToggle:OnChanged(function(Value)
+    getgenv().Enabled = Value
+    Fluent:Notify({
+        Title = "Toggle Revistar",
+        Content = Value and "Revistar com tecla T ativado!" or "Revistar com tecla T desativado!",
+        Duration = 3
+    })
+end)
+
+-- Sistema de detecção da tecla T
+local UserInputService = game:GetService("UserInputService")
+local TextChatService = game:GetService("TextChatService")
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.T and getgenv().Enabled then
+        -- Função para enviar /revistar morto
+        local function sendRevistarMessage()
+            local channel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral")
+            channel:SendAsync("/revistar morto")
+        end
+        
+        -- Executa a função
+        sendRevistarMessage()
+        
+       
+    end
+end)
+
+-- Seção MOBILE
+Tabs.Main:AddSection("MOBILE")
+
+-- Botão para mobile
+Tabs.Main:AddButton({
+    Title = "mandar revistar UI",
+    Description = "Abre interface para revistar (Mobile)",
+    Callback = function()
+        -- Verifica se a UI já existe
+        local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+        if playerGui:FindFirstChild("RevistarUI") then
+            Fluent:Notify({
+                Title = "Aviso",
+                Content = "A interface Revistar já está aberta!",
+                Duration = 3
+            })
+            return
+        end
+
+        local TextChatService = game:GetService("TextChatService")
+
+        -- Função para enviar a mensagem /revistar morto
+        local function sendRevistarMessage()
+            local channel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral")
+            channel:SendAsync("/revistar morto")
+           
+        end
+
+        -- Cria a interface
+        local ScreenGui = Instance.new("ScreenGui")
+        local Frame = Instance.new("Frame")
+        local UICorner = Instance.new("UICorner")
+        local UIStroke = Instance.new("UIStroke")
+        local CloseButton = Instance.new("TextButton")
+        local CloseButtonCorner = Instance.new("UICorner")
+        local RevistarButton = Instance.new("TextButton")
+        local RevistarButtonCorner = Instance.new("UICorner")
+        local Title = Instance.new("TextLabel")
+
+        ScreenGui.Name = "RevistarUI"
+        ScreenGui.Parent = playerGui
+        ScreenGui.ResetOnSpawn = false
+
+        -- Estilo do Frame (vermelho escuro)
+        Frame.Size = UDim2.new(0, 300, 0, 150)
+        Frame.Position = UDim2.new(0.5, -150, 0.5, -100) -- Start above for animation
+        Frame.BackgroundColor3 = Color3.fromRGB(120, 20, 20) -- Vermelho escuro
+        Frame.BorderSizePixel = 0
+        Frame.BackgroundTransparency = 0.1
+        Frame.Active = true
+        UICorner.CornerRadius = UDim.new(0, 8)
+        UICorner.Parent = Frame
+        UIStroke.Thickness = 1
+        UIStroke.Color = Color3.fromRGB(180, 50, 50) -- Borda vermelha clara
+        UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        UIStroke.Parent = Frame
+
+        -- Modern draggable behavior
+        local dragging, dragInput, dragStart, startPos
+        Frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = Frame.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        Frame.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+
+        -- Título (vermelho mais escuro)
+        Title.Size = UDim2.new(1, 0, 0, 30)
+        Title.Position = UDim2.new(0, 0, 0, 0)
+        Title.BackgroundColor3 = Color3.fromRGB(80, 0, 0) -- Vermelho muito escuro
+        Title.Text = "Revistar UI"
+        Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Title.Font = Enum.Font.SourceSansBold
+        Title.TextSize = 18
+
+        -- Botão Fechar (vermelho brilhante)
+        CloseButton.Size = UDim2.new(0, 30, 0, 30)
+        CloseButton.Position = UDim2.new(1, -30, 0, 0)
+        CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0) -- Vermelho brilhante
+        CloseButton.Text = "X"
+        CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        CloseButton.Font = Enum.Font.SourceSansBold
+        CloseButton.TextSize = 18
+        CloseButtonCorner.CornerRadius = UDim.new(0, 6)
+        CloseButtonCorner.Parent = CloseButton
+        CloseButton.MouseButton1Click:Connect(function()
+            ScreenGui:Destroy()
+            game:GetService("SoundService"):PlayLocalSound(Instance.new("Sound", game.SoundService) { SoundId = "rbxassetid://4590662766", Volume = 0.5 })
+        end)
+
+        -- Botão Revistar (vermelho vibrante)
+        RevistarButton.Size = UDim2.new(0.8, 0, 0.4, 0)
+        RevistarButton.Position = UDim2.new(0.1, 0, 0.5, -30)
+        RevistarButton.BackgroundColor3 = Color3.fromRGB(180, 30, 30) -- Vermelho vibrante
+        RevistarButton.Text = "manda /revistar morto"
+        RevistarButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        RevistarButton.Font = Enum.Font.SourceSansBold
+        RevistarButton.TextSize = 20
+        RevistarButton.AutoButtonColor = true
+        RevistarButtonCorner.CornerRadius = UDim.new(0, 6)
+        RevistarButtonCorner.Parent = RevistarButton
+        RevistarButton.MouseButton1Click:Connect(function()
+            sendRevistarMessage()
+            game:GetService("SoundService"):PlayLocalSound(Instance.new("Sound", game.SoundService) { SoundId = "rbxassetid://4590662766", Volume = 0.5 })
+        end)
+
+        -- Adiciona os elementos ao frame
+        Frame.Parent = ScreenGui
+        Title.Parent = Frame
+        CloseButton.Parent = Frame
+        RevistarButton.Parent = Frame
+
+        -- Animação de abertura
+        Frame:TweenPosition(UDim2.new(0.5, -150, 0.5, -75), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+
+        -- Notificação de abertura
+        Fluent:Notify({
+            Title = "Interface Aberta",
+            Content = "Interface mobile de revistar aberta!",
+            Duration = 3
+        })
+    end
+})
+
+
 
 -- Tabela para armazenar os ESPs dos jogadores
 local players = game:GetService("Players")
@@ -1536,6 +1777,7 @@ VisualTab:AddButton({
 print("Botão Testar ESP criado!")
 
 
+
 -- Serviços
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -1649,6 +1891,8 @@ local function toggleNoClip()
     end
     print(noClipEnabled and "No-Clip ativado!" or "No-Clip desativado!")
 end
+
+
 
 -- Aba Veiculos
 local VehicleTab = Window:AddTab({ Title = "Veiculos", Icon = "car" })
