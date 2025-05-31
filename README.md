@@ -9,7 +9,7 @@ local Window = Fluent:CreateWindow({
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = Enum.KeyCode.K
 })
 
 -- Função para notificação
@@ -1642,139 +1642,571 @@ Tabs.Main:AddButton({
 })
 
 
+-- Inicializar variáveis globais
+getgenv().ESPPlayersEnabled = getgenv().ESPPlayersEnabled or false
+getgenv().ESPStaffEnabled = getgenv().ESPStaffEnabled or false
+getgenv().ESPTextEnabled = getgenv().ESPTextEnabled or false
 
--- Tabela para armazenar os ESPs dos jogadores
-local players = game:GetService("Players")
-local espInstances = {}
 
--- Função para criar o ESP
-local function createESPName(player)
-    local character = player.Character or player.CharacterAdded:Wait()
-    if character:FindFirstChild("ESPName") then return end 
+
+-- Criar aba Visual
+local Tabs = {
+    Visual = Window:AddTab({ Title = "Visual 👁️‍", Icon = "eye" })
+}
+
+-- Variáveis de controle
+local espData = {}
+local rgbCycleEnabled = false
+local currentStaticColor = Color3.fromRGB(180, 50, 50)
+local isInventoryESPActive = false
+local playerAddedConnection
+local playerRemovedConnection
+local rgbCoroutine
+
+-- Função para verificar se é staff
+local function isStaff(player)
+    if not player or not player.Parent then return false end
+    local success, result = pcall(function()
+        return player.Team and player.Team.Name == "STAFF"
+    end)
+    return success and result or false
+end
+
+-- ESP de Inventário
+local function createInventoryESP(player)
+    if player == game.Players.LocalPlayer then return end
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    -- Remove ESP existente
+    local existingGui = character:FindFirstChild("InventoryESP")
+    if existingGui then existingGui:Destroy() end
+
     local billboardGui = Instance.new("BillboardGui")
-    billboardGui.Name = "ESPName"
-    billboardGui.Adornee = character:WaitForChild("Head")
-    billboardGui.Size = UDim2.new(27, 0, 2, 0) 
-    billboardGui.StudsOffset = Vector3.new(0, 3, 0)
-    billboardGui.AlwaysOnTop = true
-
-    local nameLabel = Instance.new("TextLabel", billboardGui)
-    nameLabel.Text = player.Name
-    nameLabel.Size = UDim2.new(1, 0, 1, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.TextStrokeTransparency = 0.2 
-    nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0) 
-    nameLabel.Font = Enum.Font.SourceSansBold
-    nameLabel.TextSize = 27 
-    nameLabel.TextScaled = false
-
-    -- Efeito arco-íris
-    local function updateRainbow()
-        local hue = tick() % 5 / 5
-        nameLabel.TextColor3 = Color3.fromHSV(hue, 1, 1)
-    end
-
-    game:GetService("RunService").RenderStepped:Connect(updateRainbow)
-
+    billboardGui.Name = "InventoryESP"
     billboardGui.Parent = character
-    espInstances[player] = billboardGui 
-    print("ESP criado para " .. player.Name)
-end
+    billboardGui.Size = UDim2.new(0, 120, 0, 100)
+    billboardGui.StudsOffset = Vector3.new(0, 4.5, 0)
+    billboardGui.Adornee = character.HumanoidRootPart
+    billboardGui.AlwaysOnTop = true
+    billboardGui.MaxDistance = 500
 
--- Função para remover o ESP
-local function removeESPName(player)
-    local esp = espInstances[player]
-    if esp then
-        esp:Destroy()
-        espInstances[player] = nil 
-        print("ESP removido para " .. player.Name)
-    end
-end
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.7
+    frame.BorderSizePixel = 0
+    frame.Parent = billboardGui
 
--- Função para monitorar o ESP
-local monitorValue = false -- Armazenar o estado do toggle
-local function monitorESP(Value)
-    monitorValue = Value
-    for _, player in ipairs(players:GetPlayers()) do
-        if player ~= players.LocalPlayer then
-            local character = player.Character
-            if character then
-                if Value then
-                    createESPName(player)
-                else
-                    removeESPName(player) 
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(180, 50, 50)
+    stroke.Parent = frame
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.2, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.fromRGB(180, 50, 50)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 14
+    nameLabel.Text = player.Name
+    nameLabel.TextWrapped = true
+    nameLabel.Parent = frame
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, -10, 0.75, 0)
+    textLabel.Position = UDim2.new(0, 5, 0.2, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.Font = Enum.Font.SourceSans
+    textLabel.TextSize = 12
+    textLabel.TextWrapped = true
+    textLabel.TextYAlignment = Enum.TextYAlignment.Top
+    textLabel.Parent = frame
+
+    local function updateInventory()
+        if not player or not player.Parent or not character or not character.Parent then
+            return false
+        end
+
+        local backpack = player:FindFirstChild("Backpack")
+        local items = {}
+        
+        if backpack then
+            for _, obj in ipairs(backpack:GetChildren()) do
+                if obj:IsA("Tool") or obj:IsA("HopperBin") then
+                    table.insert(items, obj.Name)
                 end
             end
         end
+        
+        if character then
+            for _, obj in ipairs(character:GetChildren()) do
+                if obj:IsA("Tool") or obj:IsA("HopperBin") then
+                    table.insert(items, obj.Name)
+                end
+            end
+        end
+        
+        if #items == 0 then
+            textLabel.Text = "Inventário vazio"
+        else
+            local itemList = "Itens:\n"
+            for i, item in ipairs(items) do
+                if i <= 16 then
+                    itemList = itemList .. "- " .. item .. "\n"
+                end
+            end
+            textLabel.Text = itemList
+        end
+        return true
     end
 
-    -- Monitorar novos jogadores
-    players.PlayerAdded:Connect(function(player)
-        if player ~= players.LocalPlayer then
-            player.CharacterAdded:Connect(function(character)
-                if monitorValue then
-                    createESPName(player)
-                end
-            end)
+    -- Atualização inicial
+    local success = pcall(updateInventory)
+    if not success then
+        billboardGui:Destroy()
+        return
+    end
+
+    -- Loop de atualização
+    task.spawn(function()
+        while billboardGui and billboardGui.Parent and isInventoryESPActive do
+            if not updateInventory() then
+                break
+            end
+            task.wait(1)
+        end
+        if billboardGui then
+            billboardGui:Destroy()
         end
     end)
-
-    players.PlayerRemoving:Connect(function(player)
-        removeESPName(player) 
-    end)
-    print("MonitorESP atualizado: " .. tostring(Value))
 end
 
+-- ESP de Jogadores (Health Bar)
+local function createESPPlayer(player)
+    if player == game.Players.LocalPlayer or not player.Character then return nil end
+    local character = player.Character
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not rootPart or not humanoid then return nil end
 
-print("Janela da Fluent criada!")
+    -- Remove ESP existente
+    local existingESP = character:FindFirstChild("HealthESP")
+    if existingESP then existingESP:Destroy() end
 
-local VisualTab = Window:AddTab({
-    Title = "Visual 👁️‍🗨️",
-    Icon = "" -- Adicione um ícone, se desejar (ex.: "rbxassetid://1234567890")
-})
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Name = "HealthESP"
+    billboardGui.Parent = character
+    billboardGui.Size = UDim2.new(0, 100, 0, 20)
+    billboardGui.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboardGui.Adornee = rootPart
+    billboardGui.AlwaysOnTop = true
+    billboardGui.MaxDistance = 500
 
--- Tentar criar o toggle com AddToggle
-local successToggle, toggleError = pcall(function()
-    VisualTab:AddToggle({
-        Title = "ESP Name",
-        Default = false,
-        Callback = function(Value)
-            monitorESP(Value)
-            print("ESP Nome " .. (Value and "ativado!" or "desativado!"))
+    local healthFrame = Instance.new("Frame")
+    healthFrame.Size = UDim2.new(1, 0, 0.3, 0)
+    healthFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    healthFrame.BackgroundTransparency = 0.5
+    healthFrame.BorderSizePixel = 0
+    healthFrame.Parent = billboardGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = healthFrame
+
+    local healthBar = Instance.new("Frame")
+    healthBar.Size = UDim2.new(0.98, 0, 0.8, 0)
+    healthBar.Position = UDim2.new(0.01, 0, 0.1, 0)
+    healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    healthBar.BorderSizePixel = 0
+    healthBar.Parent = healthFrame
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.7, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0.3, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 12
+    nameLabel.Text = player.Name
+    nameLabel.TextWrapped = true
+    nameLabel.Parent = billboardGui
+
+    local function updateHealthBar()
+        if not humanoid or not billboardGui.Parent or not player.Parent then
+            return false
         end
-    })
-end)
-if successToggle then
-    print("Toggle ESP Nome criado com AddToggle!")
-else
-    warn("Erro ao criar toggle com AddToggle: " .. tostring(toggleError))
-    -- Tentar criar com CreateToggle como alternativa
-    local successCreateToggle, createToggleError = pcall(function()
-        VisualTab:CreateToggle({
-            Title = "ESP Nome",
-            Default = false,
-            Callback = function(Value)
-                monitorESP(Value)
-                print("ESP Nome " .. (Value and "ativado!" or "desativado!"))
+        
+        local healthPercent = math.max(0, math.min(1, humanoid.Health / humanoid.MaxHealth))
+        healthBar.Size = UDim2.new(0.98 * healthPercent, 0, 0.8, 0)
+        healthBar.BackgroundColor3 = Color3.fromHSV(healthPercent * 0.3, 1, 1)
+        
+        if getgenv().ESPTextEnabled then
+            nameLabel.Text = string.format("%s\nHP: %.0f/%.0f", player.Name, humanoid.Health, humanoid.MaxHealth)
+        else
+            nameLabel.Text = player.Name
+        end
+        return true
+    end
+
+    -- Atualização inicial
+    if not updateHealthBar() then
+        billboardGui:Destroy()
+        return nil
+    end
+
+    -- Conectar eventos
+    local healthChangedConnection = humanoid.HealthChanged:Connect(function()
+        updateHealthBar()
+    end)
+
+    -- Loop de atualização
+    task.spawn(function()
+        while billboardGui and billboardGui.Parent and getgenv().ESPPlayersEnabled do
+            if not updateHealthBar() then
+                break
             end
+            task.wait(0.5)
+        end
+        if healthChangedConnection then
+            healthChangedConnection:Disconnect()
+        end
+        if billboardGui then
+            billboardGui:Destroy()
+        end
+    end)
+
+    return { billboardGui = billboardGui, healthBar = healthBar }
+end
+
+-- ESP de Staff
+local function createESPStaff(player)
+    if not isStaff(player) or not player.Character then return nil end
+    local character = player.Character
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not rootPart or not humanoid then return nil end
+
+    -- Remove ESP existente
+    local existingHighlight = character:FindFirstChild("Highlight")
+    if existingHighlight then existingHighlight:Destroy() end
+    local existingESP = character:FindFirstChild("StaffESP")
+    if existingESP then existingESP:Destroy() end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = character
+    highlight.FillColor = currentStaticColor
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.Parent = character
+
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Name = "StaffESP"
+    billboardGui.Parent = character
+    billboardGui.Size = UDim2.new(0, 100, 0, 50)
+    billboardGui.StudsOffset = Vector3.new(0, 4, 0)
+    billboardGui.Adornee = rootPart
+    billboardGui.AlwaysOnTop = true
+    billboardGui.MaxDistance = 500
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextScaled = true
+    textLabel.Parent = billboardGui
+
+    local function updateStaffESP()
+        if not humanoid or not billboardGui.Parent or not player.Parent then
+            return false
+        end
+        
+        local localPlayer = game.Players.LocalPlayer
+        local localRootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local distance = localRootPart and (localRootPart.Position - rootPart.Position).Magnitude or 0
+        
+        textLabel.Text = string.format("%s [STAFF]\nHP: %.0f/%.0f\nDist: %.1f", 
+            player.Name, humanoid.Health, humanoid.MaxHealth, distance)
+        return true
+    end
+
+    -- Atualização inicial
+    if not updateStaffESP() then
+        highlight:Destroy()
+        billboardGui:Destroy()
+        return nil
+    end
+
+    -- Loop de atualização
+    task.spawn(function()
+        while billboardGui and billboardGui.Parent and getgenv().ESPStaffEnabled do
+            if not updateStaffESP() then
+                break
+            end
+            task.wait(0.5)
+        end
+        if highlight then
+            highlight:Destroy()
+        end
+        if billboardGui then
+            billboardGui:Destroy()
+        end
+    end)
+
+    return { highlight = highlight, billboardGui = billboardGui, textLabel = textLabel }
+end
+
+-- Função para limpar ESPs
+local function cleanupESPs()
+    for player, data in pairs(espData) do
+        if data then
+            if data.billboardGui then data.billboardGui:Destroy() end
+            if data.highlight then data.highlight:Destroy() end
+        end
+    end
+    espData = {}
+end
+
+-- Função para atualizar ESPs
+local function updateAllESPs()
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer and player.Character then
+            -- ESP Staff
+            if isStaff(player) and getgenv().ESPStaffEnabled and not espData[player] then
+                espData[player] = createESPStaff(player)
+            -- ESP Jogadores
+            elseif not isStaff(player) and getgenv().ESPPlayersEnabled and not espData[player] then
+                espData[player] = createESPPlayer(player)
+            end
+            
+            -- ESP Inventário
+            if isInventoryESPActive then
+                createInventoryESP(player)
+            end
+        end
+    end
+end
+
+-- Função para ciclo RGB
+local function cycleRGB()
+    if rgbCoroutine then
+        task.cancel(rgbCoroutine)
+    end
+    
+    rgbCoroutine = task.spawn(function()
+        local hue = 0
+        while rgbCycleEnabled do
+            hue = (hue + 0.01) % 1
+            local color = Color3.fromHSV(hue, 1, 1)
+            currentStaticColor = color
+            
+            for _, data in pairs(espData) do
+                if data and data.highlight then
+                    data.highlight.FillColor = color
+                end
+            end
+            
+            task.wait(0.05)
+        end
+    end)
+end
+
+-- Configurar eventos de jogadores
+local function setupPlayerEvents()
+    if playerAddedConnection then playerAddedConnection:Disconnect() end
+    if playerRemovedConnection then playerRemovedConnection:Disconnect() end
+    
+    playerAddedConnection = game.Players.PlayerAdded:Connect(function(player)
+        task.wait(1) -- Aguarda o jogador carregar
+        updateAllESPs()
+    end)
+    
+    playerRemovedConnection = game.Players.PlayerRemoving:Connect(function(player)
+        if espData[player] then
+            local data = espData[player]
+            if data.billboardGui then data.billboardGui:Destroy() end
+            if data.highlight then data.highlight:Destroy() end
+            espData[player] = nil
+        end
+    end)
+end
+
+-- Toggle ESP Inventário
+Tabs.Visual:AddToggle("InventoryESP", {
+    Title = "ESP Inventário 🎒",
+    Description = "Mostra o inventário dos jogadores",
+    Default = false
+}):OnChanged(function(value)
+    isInventoryESPActive = value
+    
+    -- Som de feedback
+    pcall(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://4590662766"
+        sound.Volume = 0.5
+        sound.Parent = game.SoundService
+        sound:Play()
+        sound.Ended:Connect(function() sound:Destroy() end)
+    end)
+    
+    if value then
+        setupPlayerEvents()
+        updateAllESPs()
+        Fluent:Notify({
+            Title = "ESP Ativado",
+            Content = "ESP de inventário ativado!",
+            Duration = 3
         })
-    end)
-    if successCreateToggle then
-        print("Toggle ESP Nome criado com CreateToggle!")
     else
-        warn("Erro ao criar toggle com CreateToggle: " .. tostring(createToggleError))
+        -- Remove todos os ESPs de inventário
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player.Character then
+                local esp = player.Character:FindFirstChild("InventoryESP")
+                if esp then esp:Destroy() end
+            end
+        end
+        Fluent:Notify({
+            Title = "ESP Desativado",
+            Content = "ESP de inventário desativado!",
+            Duration = 3
+        })
     end
-end
+end)
 
--- Adicionar um botão como alternativa para testar a interface
-VisualTab:AddButton({
-    Title = "ESP NAME (BETA)",
+-- Toggle ESP Jogadores
+Tabs.Visual:AddToggle("ESPPlayers", {
+    Title = "ESP Jogadores 👁️",
+    Description = "Mostra barra de vida dos jogadores",
+    Default = false
+}):OnChanged(function(value)
+    getgenv().ESPPlayersEnabled = value
+    
+    -- Som de feedback
+    pcall(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://4590662766"
+        sound.Volume = 0.5
+        sound.Parent = game.SoundService
+        sound:Play()
+        sound.Ended:Connect(function() sound:Destroy() end)
+    end)
+    
+    if value then
+        setupPlayerEvents()
+        updateAllESPs()
+        if rgbCycleEnabled then cycleRGB() end
+        Fluent:Notify({
+            Title = "ESP Jogadores",
+            Content = "ESP com barra de vida ativado!",
+            Duration = 3
+        })
+    else
+        -- Remove ESPs de jogadores
+        for player, data in pairs(espData) do
+            if not isStaff(player) and data then
+                if data.billboardGui then data.billboardGui:Destroy() end
+                espData[player] = nil
+            end
+        end
+        Fluent:Notify({
+            Title = "ESP Jogadores",
+            Content = "ESP com barra de vida desativado!",
+            Duration = 3
+        })
+    end
+end)
+
+-- Toggle ESP Staff
+Tabs.Visual:AddToggle("ESPStaff", {
+    Title = "ESP Staff 👮",
+    Description = "Destaca membros da staff",
+    Default = false
+}):OnChanged(function(value)
+    getgenv().ESPStaffEnabled = value
+    
+    -- Som de feedback
+    pcall(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://4590662766"
+        sound.Volume = 0.5
+        sound.Parent = game.SoundService
+        sound:Play()
+        sound.Ended:Connect(function() sound:Destroy() end)
+    end)
+    
+    if value then
+        setupPlayerEvents()
+        updateAllESPs()
+        if rgbCycleEnabled then cycleRGB() end
+        Fluent:Notify({
+            Title = "ESP Staff",
+            Content = "ESP Staff ativado!",
+            Duration = 3
+        })
+    else
+        -- Remove ESPs de staff
+        for player, data in pairs(espData) do
+            if isStaff(player) and data then
+                if data.highlight then data.highlight:Destroy() end
+                if data.billboardGui then data.billboardGui:Destroy() end
+                espData[player] = nil
+            end
+        end
+        Fluent:Notify({
+            Title = "ESP Staff",
+            Content = "ESP Staff desativado!",
+            Duration = 3
+        })
+    end
+end)
+
+
+
+-- Botão para limpar todos os ESPs
+Tabs.Visual:AddButton({
+    Title = "Limpar ESPs",
+    Description = "Remove todos os ESPs ativos",
     Callback = function()
-        monitorESP(true)
-        print("Botão Testar ESP clicado!")
+        cleanupESPs()
+        
+        -- Remove ESPs de inventário
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player.Character then
+                local esp = player.Character:FindFirstChild("InventoryESP")
+                if esp then esp:Destroy() end
+            end
+        end
+        
+        Fluent:Notify({
+            Title = "ESPs Limpos",
+            Content = "Todos os ESPs foram removidos!",
+            Duration = 3
+        })
     end
 })
-print("Botão Testar ESP criado!")
+
+-- Notificação de carregamento
+Fluent:Notify({
+    Title = "Visual Carregado",
+    Content = "Seção visual com ESPs corrigidos carregada com sucesso!",
+    Duration = 3
+})
 
 
 
